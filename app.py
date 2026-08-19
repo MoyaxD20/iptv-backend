@@ -1,21 +1,22 @@
 import os
-from flask import Flask, Response, request
+import requests
+from flask import Flask, Response, redirect, request
 
 app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "¡El servidor de streaming de la Apoderada está activo y funcionando!", 200
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 @app.route('/stream')
 def stream_video():
-    # Aquí es donde más adelante conectaremos el puente hacia tu video
-    video_url = request.args.get('url')
-    if not video_url:
-        return "Falta la URL del video", 400
+    # El usuario enviará el ID del mensaje, por ejemplo: /stream?chat_id=-1002914692761&message_id=6
+    chat_id = request.args.get('chat_id')
+    message_id = request.args.get('message_id')
     
-    # Render o el servidor redirige el flujo de forma estable a la app
-    return f"Reproduciendo contenido desde: {video_url}"
+    # URL de la API de Telegram para obtener la información del archivo
+    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id=..." 
+    
+    # Nota: Para archivos privados, lo mejor es redirigir al bot
+    # Por ahora, probaremos la redirección simple
+    return f"Conectando al grupo {chat_id} mensaje {message_id}..."
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
