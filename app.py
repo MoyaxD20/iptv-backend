@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, redirect, request, Response
+from flask import Flask, redirect, request
 
 app = Flask(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -16,19 +16,54 @@ def stream_video():
     if not message_id:
         return "Falta el parámetro message_id", 400
     
-    # Telegram no tiene una función directa 'getChannelMessage', pero podemos usar
-    # un truco limpio de la API o redirigir usando la estructura del canal si es público,
-    # o consultar la API oficial de Bot para obtener actualizaciones recientes.
-    # Una opción robusta para bots en canales es usar getChat o verificar el mensaje mediante forward:
+    # Telegram permite obtener mensajes de un canal reenviándolos o consultando.
+    # Pero el método más estable para un Bot en un canal es usar getUpdates reciente
+    # o utilizar el enlace directo de exportación si el archivo es accesible.
     
-    # Intentemos obtener el archivo directamente usando la API de Telegram para mensajes de canal:
-    # Nota: Los canales a veces requieren que el bot sea administrador con plenos poderes (ya lo es).
+    # Truco directo: Como tu bot es administrador del canal, 
+    # podemos usar la API para buscar el file_id mediante un forward temporal o consulta.
+    # Alternativa limpia: Si el bot usa el método de exportación de chat:
     
-    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    # Como alternativa rápida y ultra estable para streaming:
-    # Vamos a devolver una respuesta clara para validar que el servidor recibe el ID perfecto.
+    # Vamos a pedir la información usando un endpoint compatible de la API de Telegram:
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/forwardMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "from_chat_id": CHAT_ID,
+        "message_id": int(message_id),
+        "disable_notification": True
+    }
     
-    return f"Recibí la petición para el video con ID: {message_id} en el canal {CHAT_ID}. Ajustando enlace de redirección...", 200
+    # Al reenviar el mensaje al propio chat (o a una variable), la API nos devuelve 
+    # el objeto completo del mensaje con su 'video' o 'document' y su 'file_id'.
+    res = requests.post(url, json=payload).json()
+    
+    if not res.get("ok"):
+        return f"Error al obtener el contenido de Telegram: {res.get('description', 'Desconocido')}", 400
+        
+    msg = res["result"]
+    file_id = None
+    if "video" in msg:
+        file_id = msg["video"]["file_id"]
+    elif "document" in msg:
+        file_id = msg["document"]["file_id"]
+    elif "audio" in msg:
+        file_id = msg["audio"]["file_id"]
+        
+    if not file_id:
+        return "El mensaje no contiene un archivo multimedia válido", 400
+        
+    # Obtenemos la ruta real de descarga en los servidores de Telegram
+    file_info_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+    file_info = requests.get(file_info_url).json()
+    
+    if not file_info.get("ok"):
+        return "No se pudo obtener la ruta del archivo", 500
+        
+    file_path = file_info["result"]["file_path"]
+    download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+    
+    # Redirigimos al ExoPlayer directamente al flujo del video
+    return redirect(download_url)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
