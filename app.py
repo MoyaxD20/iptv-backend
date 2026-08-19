@@ -3,18 +3,19 @@ from flask import Flask, redirect, request
 
 app = Flask(__name__)
 
-# Diccionario temporal con un video de prueba en formato MP4 puro
+# Diccionario temporal con un video de prueba público, seguro y rápido
 VIDEOS_PRUEBA = {
-    "test": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    "test": "https://www.w3schools.com/html/mov_bbb.mp4"
 }
 
 @app.route('/')
 def home():
-    return "¡Servidor de prueba activo para la app de Android TV!", 200
+    return "¡El servidor de streaming de la Apoderada está activo y en modo de prueba!", 200
 
 @app.route('/stream')
 def stream_video():
     message_id = request.args.get('message_id')
+    
     if not message_id:
         return "Falta el parámetro message_id", 400
     
@@ -22,10 +23,12 @@ def stream_video():
     video_url = VIDEOS_PRUEBA.get(str(message_id))
     
     if not video_url:
-        return "Video no encontrado", 404
+        return "Video no encontrado en la lista de prueba", 404
         
-    # Redirección limpia al archivo MP4
+    # Redirección limpia e inmediata al archivo MP4
     return redirect(video_url)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    # Render asigna el puerto automáticamente
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
