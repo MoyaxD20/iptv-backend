@@ -4,10 +4,7 @@ from flask import Flask, redirect, request, Response
 
 app = Flask(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-@app.route('/')
-def home():
-    return "¡El servidor de streaming de la Apoderada está activo y funcionando!", 200
+CHAT_ID = "-1003174009090"  # El ID de tu canal CHAT GPT PRO CUENTAS
 
 @app.route('/stream')
 def stream_video():
@@ -15,23 +12,34 @@ def stream_video():
     if not message_id:
         return "Falta el parámetro message_id", 400
     
-    # Canal ID fijo que descubrimos
-    chat_id = "-1003174009090"
+    # 1. Obtener la información del mensaje desde Telegram
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChannelMessage?chat_id={CHAT_ID}&message_id={message_id}"
+    response = requests.get(url).json()
     
-    # 1. Pedir a la API de Telegram la información del mensaje (para extraer el video o documento)
-    telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChannelMessage?chat_id={chat_id}&message_id={message_id}"
+    if not response.get("ok"):
+        return "No pude encontrar ese mensaje en el canal", 404
+
+    # 2. Extraer el file_id del video o documento
+    msg = response["result"]
+    file_id = None
+    if "video" in msg:
+        file_id = msg["video"]["file_id"]
+    elif "document" in msg:
+        file_id = msg["document"]["file_id"]
+        
+    if not file_id:
+        return "El mensaje no contiene un video válido", 404
+
+    # 3. Obtener el enlace de descarga real
+    file_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+    file_info = requests.get(file_url).json()
+    file_path = file_info["result"]["file_path"]
     
-    # Nota de compatibilidad: Telegram usa getMessage o getFile a través del ID del archivo multimedia
-    # Usemos el método oficial para obtener el file_id del mensaje
-    info_url = f"https://api.telegram.org/bot{BOT_TOKEN}/forwardMessage" # Alternativa de respaldo o lectura directa
+    # 4. Construir la URL final de descarga
+    download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
     
-    # Forma estándar limpia: Obtener el link directo del archivo mediante getFile
-    # Primero obtenemos los datos del mensaje en el canal
-    msg_api = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates" # o consulta directa
-    
-    # Redirección inteligente al enlace del mensaje o archivo
-    return f"Canal detectado correctamente. Preparando stream para el mensaje ID: {message_id}"
+    # 5. Redirigir al reproductor directamente al archivo de Telegram
+    return redirect(download_url)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
