@@ -5,7 +5,7 @@ from telethon import TelegramClient
 
 app = Quart(__name__)
 
-# Leemos las llaves de entorno que acabas de configurar en Render
+# Leemos las llaves de entorno configuradas en Render
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
@@ -18,8 +18,12 @@ async def startup():
     # Arrancamos la sesión del bot al prender el servidor
     await client.start(bot_token=BOT_TOKEN)
 
-@app.route('/stream/<int:chat_id>/<int:message_id>.mp4')
+# 🔥 Ruta corregida para aceptar IDs negativos (como los de canales privados)
+@app.route('/stream/<chat_id>/<int:message_id>.mp4')
 async def stream_video(chat_id, message_id):
+    # Convertimos el chat_id a número internamente
+    chat_id = int(chat_id)
+    
     # Verificamos conexión
     if not client.is_connected():
         await client.connect()
@@ -46,7 +50,7 @@ async def stream_video(chat_id, message_id):
     length = limit - offset + 1
     chunk_size = 1024 * 1024  # Descargamos en bloques de 1MB a máxima velocidad
 
-    # Función generadora que envía el video como si fuera un grifo de agua
+    # Función generadora que envía el video como un flujo continuo
     async def generate():
         async for chunk in client.iter_download(message.media, offset=offset, request_size=chunk_size):
             yield chunk
