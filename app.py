@@ -5,37 +5,38 @@ from telethon import TelegramClient
 
 app = Quart(__name__)
 
-# Leemos las llaves de entorno configuradas en Render
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 
-# Inicializamos el cliente de Telegram
 client = TelegramClient('bot_session', API_ID, API_HASH)
 
 @app.before_serving
 async def startup():
-    # Arrancamos la sesión del bot al prender el servidor
     await client.start(bot_token=BOT_TOKEN)
 
-# 🔥 Ruta corregida para aceptar IDs negativos (como los de canales privados)
-@app.route('/stream/<chat_id>/<int:message_id>.mp4')
+# 🔥 RUTA DE PRUEBA: Para saber si el servidor se actualizó
+@app.route('/')
+async def index():
+    return "¡Servidor de Streaming Activo y Actualizado!"
+
+# 🔥 RUTA BLINDADA: Recibe cualquier cosa y nosotros la convertimos a número
+@app.route('/stream/<chat_id>/<message_id>.mp4')
 async def stream_video(chat_id, message_id):
-    # Convertimos el chat_id a número internamente
-    chat_id = int(chat_id)
-    
-    # Verificamos conexión
+    try:
+        chat_id = int(chat_id)
+        message_id = int(message_id.split('.')[0]) # Por si llega con extensión extra
+    except ValueError:
+        return "ID inválido", 400
+
     if not client.is_connected():
         await client.connect()
 
-    # Buscamos el mensaje exacto que contiene tu película/serie
     message = await client.get_messages(chat_id, ids=message_id)
     if not message or not message.media:
-        return "Video no encontrado", 404
+        return "Video no encontrado en Telegram", 404
 
     file_size = message.document.size
-
-    # 🔥 MAGIA PARA EXOPLAYER: Manejo de fragmentos (Range Requests)
     range_header = request.headers.get('Range')
     offset = 0
     limit = file_size - 1
@@ -48,14 +49,12 @@ async def stream_video(chat_id, message_id):
                 limit = int(match.group(2))
 
     length = limit - offset + 1
-    chunk_size = 1024 * 1024  # Descargamos en bloques de 1MB a máxima velocidad
+    chunk_size = 1024 * 1024 
 
-    # Función generadora que envía el video como un flujo continuo
     async def generate():
         async for chunk in client.iter_download(message.media, offset=offset, request_size=chunk_size):
             yield chunk
 
-    # Cabeceras que engañan a ExoPlayer para que crea que es un servidor VOD normal
     headers = {
         'Content-Type': 'video/mp4',
         'Accept-Ranges': 'bytes',
